@@ -322,7 +322,7 @@ int main() {
 
       nlohmann::json json;
       try {
-        std::ifstream(*it_filenames++) >> json;
+        std::ifstream((it_filenames++)->path().string()) >> json;
       } catch (nlohmann::json::parse_error) {
         continue;
       }
