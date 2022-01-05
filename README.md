@@ -1,4 +1,4 @@
-# Boxed
+# Boxed [![Build Status](https://github.com/vasilenkoalexey/Boxed/actions/workflows/cmake.yml/badge.svg)](https://github.com/vasilenkoalexey/Boxed/actions)
 Loudspeaker Vented Box (aka: Ported Box, Bass Reflex) enclosure designer. Just put the `drivers` directory at the same path as the executable file.
 
 <img src="response.png?raw=true">
