@@ -3,6 +3,7 @@
 #include <fstream>
 #include <numbers>
 #include <vector>
+#include <ranges>
 
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
@@ -301,9 +302,9 @@ int main() {
   static std::array<double, nfreq> freq;
   static const double gap =
       std::exp((std::log(high) - std::log(low)) / (nfreq));
-  freq[0] = low;
-  for (int i = 1; i < nfreq; ++i) {
-    freq[i] = freq[i - 1] * gap;
+  for(double fp = low; double &f : freq) {
+    f = fp;
+    fp *= gap;
   }
 
   static std::map<std::string, std::vector<driver_model>> vendors;
@@ -1075,9 +1076,10 @@ int main() {
                               ImPlotAxisFlags_LogScale);
             ImPlot::SetupAxisLimits(ImAxis_X1, freq.front(), freq.back(),
                                     ImPlotCond_Always);
-            const auto [min, max] = std::minmax_element(g.begin(), g.end());
-            const double d = (*max - *min) * .1;
-            ImPlot::SetupAxisLimits(ImAxis_Y1, *min - d, *max + d,
+            
+            const auto [min, max] = std::ranges::minmax(g);
+            const double d = (max - min) * .1;
+            ImPlot::SetupAxisLimits(ImAxis_Y1, min - d, max + d,
                                     fit_g ? ImPlotCond_Always
                                           : ImPlotCond_Once);
             fit_g = false;
@@ -1136,9 +1138,10 @@ int main() {
             }
             ImPlot::SetupAxes("Frequency [Hz]", "Response phase [deg]",
                               ImPlotAxisFlags_LogScale);
-            const auto [min, max] = std::minmax_element(phg.begin(), phg.end());
-            const double d = (*max - *min) * .1;
-            ImPlot::SetupAxisLimits(ImAxis_Y1, *min - d, *max + d,
+
+            const auto [min, max] = std::ranges::minmax(phg);
+            const double d = (max - min) * .1;
+            ImPlot::SetupAxisLimits(ImAxis_Y1, min - d, max + d,
                                     fit_phg ? ImPlotCond_Always
                                             : ImPlotCond_Once);
             fit_phg = false;
@@ -1180,9 +1183,10 @@ int main() {
                               ImPlotAxisFlags_LogScale);
             ImPlot::SetupAxisLimits(ImAxis_X1, freq.front(), freq.back(),
                                     ImPlotCond_Always);
-            const auto [min, max] = std::minmax_element(gd.begin(), gd.end());
-            const double d = (*max - *min) * .1;
-            ImPlot::SetupAxisLimits(ImAxis_Y1, *min - d, *max + d,
+            
+            const auto [min, max] = std::ranges::minmax(gd);
+            const double d = (max - min) * .1;
+            ImPlot::SetupAxisLimits(ImAxis_Y1, min - d, max + d,
                                     fit_gd ? ImPlotCond_Always
                                            : ImPlotCond_Once);
             fit_gd = false;
@@ -1219,9 +1223,10 @@ int main() {
                               ImPlotAxisFlags_LogScale);
             ImPlot::SetupAxisLimits(ImAxis_X1, freq.front(), freq.back(),
                                     ImPlotCond_Always);
-            const auto [min, max] = std::minmax_element(x.begin(), x.end());
-            const double d = (*max - *min) * .1;
-            ImPlot::SetupAxisLimits(ImAxis_Y1, *min - d, *max + d,
+
+            const auto [min, max] = std::ranges::minmax(x);
+            const double d = (max - min) * .1;
+            ImPlot::SetupAxisLimits(ImAxis_Y1, min - d, max + d,
                                     fit_x ? ImPlotCond_Always
                                           : ImPlotCond_Once);
             fit_x = false;
@@ -1282,9 +1287,9 @@ int main() {
                               ImPlotAxisFlags_LogScale);
             ImPlot::SetupAxisLimits(ImAxis_X1, freq.front(), freq.back(),
                                     ImPlotCond_Always);
-            const auto [min, max] = std::minmax_element(v.begin(), v.end());
-            const double d = (*max - *min) * .1;
-            ImPlot::SetupAxisLimits(ImAxis_Y1, *min - d, *max + d,
+            const auto [min, max] = std::ranges::minmax(v);
+            const double d = (max - min) * .1;
+            ImPlot::SetupAxisLimits(ImAxis_Y1, min - d, max + d,
                                     fit_v ? ImPlotCond_Always
                                           : ImPlotCond_Once);
             fit_v = false;
@@ -1339,9 +1344,9 @@ int main() {
             ImPlot::SetupAxisLimits(ImAxis_X1, freq.front(), freq.back(),
                                     ImPlotCond_Always);
 
-            const auto [min, max] = std::minmax_element(zvc.begin(), zvc.end());
-            const double d = (*max - *min) * .1;
-            ImPlot::SetupAxisLimits(ImAxis_Y1, *min - d, *max + d,
+            const auto [min, max] = std::ranges::minmax(zvc);
+            const double d = (max - min) * .1;
+            ImPlot::SetupAxisLimits(ImAxis_Y1, min - d, max + d,
                                     fit_zvc ? ImPlotCond_Always
                                             : ImPlotCond_Once);
             fit_zvc = false;
@@ -1384,10 +1389,9 @@ int main() {
             ImPlot::SetupAxisLimits(ImAxis_X1, freq.front(), freq.back(),
                                     ImPlotCond_Always);
 
-            const auto [min, max] =
-                std::minmax_element(phzvc.begin(), phzvc.end());
-            const double d = (*max - *min) * .1;
-            ImPlot::SetupAxisLimits(ImAxis_Y1, *min - d, *max + d,
+            const auto [min, max] = std::ranges::minmax(phzvc);
+            const double d = (max - min) * .1;
+            ImPlot::SetupAxisLimits(ImAxis_Y1, min - d, max + d,
                                     fit_phzvc ? ImPlotCond_Always
                                               : ImPlotCond_Once);
             fit_phzvc = false;
@@ -1428,10 +1432,9 @@ int main() {
                               ImPlotAxisFlags_LogScale);
             ImPlot::SetupAxisLimits(ImAxis_X1, freq.front(), freq.back(),
                                     ImPlotCond_Always);
-
-            const auto [min, max] = std::minmax_element(spl.begin(), spl.end());
-            const double d = (*max - *min) * .1;
-            ImPlot::SetupAxisLimits(ImAxis_Y1, *min - d, *max + d,
+            const auto [min, max] = std::ranges::minmax(spl);
+            const double d = (max - min) * .1;
+            ImPlot::SetupAxisLimits(ImAxis_Y1, min - d, max + d,
                                     fit_spl ? ImPlotCond_Always
                                             : ImPlotCond_Once);
             fit_spl = false;
