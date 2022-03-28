@@ -69,6 +69,10 @@ if(MSVC)
                       "/ENTRY:mainCRTStartup")
 endif()
 
+if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fcoroutines")
+endif()
+
 target_include_directories(boxed PRIVATE ${PROJECT_SOURCE_DIR}/${GLEW}/include)
 
 target_include_directories(boxed PRIVATE ${PROJECT_SOURCE_DIR}/${IMGUI}/)
