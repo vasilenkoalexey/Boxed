@@ -14,7 +14,7 @@
 #include "implot.h"
 #include "nlohmann/json.hpp"
 
-#if defined(__clang__) && !defined(__GNUC__)
+#if defined(__clang__)
 
 #include <experimental/coroutine>
 
