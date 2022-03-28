@@ -5,7 +5,6 @@
 #include <ranges>
 #include <vector>
 
-#include <GL/glew.h>
 #include <GLFW/glfw3.h>
 
 #include "backends/imgui_impl_glfw.h"

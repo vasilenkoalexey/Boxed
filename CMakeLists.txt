@@ -3,12 +3,10 @@
 project("Boxed")
 
 set(GLFW glfw-3.3.5)
-set(GLEW glew-2.2.0)
 set(IMGUI imgui-1.85)
 set(JSON json-3.10.4)
 
 add_subdirectory(${PROJECT_SOURCE_DIR}/${GLFW} EXCLUDE_FROM_ALL)
-add_subdirectory(${PROJECT_SOURCE_DIR}/${GLEW}/build/cmake EXCLUDE_FROM_ALL)
 add_subdirectory(${PROJECT_SOURCE_DIR}/${JSON} EXCLUDE_FROM_ALL)
 
 add_executable(
@@ -48,10 +46,6 @@ set(GLFW_INSTALL
     OFF
     CACHE BOOL "" FORCE)
 
-set(BUILD_UTILS
-    OFF
-    CACHE BOOL "" FORCE)
-
 set(JSON_Install
     OFF
     CACHE INTERNAL "" FORCE)
@@ -62,7 +56,7 @@ set(JSON_ImplicitConversions
     OFF
     CACHE INTERNAL "" FORCE)
 
-target_link_libraries(boxed glfw glew_s nlohmann_json::nlohmann_json)
+target_link_libraries(boxed glfw nlohmann_json::nlohmann_json)
 
 if(MSVC)
   target_link_options(boxed PRIVATE "/SUBSYSTEM:WINDOWS"
@@ -72,8 +66,6 @@ endif()
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fcoroutines")
 endif()
-
-target_include_directories(boxed PRIVATE ${PROJECT_SOURCE_DIR}/${GLEW}/include)
 
 target_include_directories(boxed PRIVATE ${PROJECT_SOURCE_DIR}/${IMGUI}/)
 

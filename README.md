@@ -14,7 +14,6 @@ Loudspeaker Vented Box (aka: Ported Box, Bass Reflex) enclosure designer. Just p
 
 ## Libraries used
 
-* [GLEW (nigels-com)](https://github.com/nigels-com/glew)
 * [GLFW (GLFW)](https://github.com/glfw/glfw)
 * [Dear ImGui (ocornut)](https://github.com/ocornut/imgui)
 * [ImPlot (epezent)](https://github.com/epezent/implot)
