@@ -1,5 +1,4 @@
 #include <complex>
-#include <coroutine>
 #include <filesystem>
 #include <fstream>
 #include <numbers>
@@ -14,6 +13,35 @@
 #include "imgui.h"
 #include "implot.h"
 #include "nlohmann/json.hpp"
+
+#if defined(__clang__)
+
+#include <experimental/coroutine>
+
+struct coroutine {
+    struct promise_type {
+        coroutine get_return_object() { return {.h_ = std::experimental::coroutine_handle<promise_type>::from_promise(*this)}; }
+        std::experimental::suspend_never initial_suspend() { return {}; }
+        std::experimental::suspend_always final_suspend() noexcept { return {}; }
+        void unhandled_exception() {}
+        void return_void() {}
+    };
+    std::experimental::coroutine_handle<promise_type> h_;
+};
+#else
+#include <coroutine>
+
+struct coroutine {
+    struct promise_type {
+        coroutine get_return_object() { return {.h_ = std::coroutine_handle<promise_type>::from_promise(*this)}; }
+        std::suspend_never initial_suspend() { return {}; }
+        std::suspend_always final_suspend() noexcept { return {}; }
+        void unhandled_exception() {}
+        void return_void() {}
+    };
+    std::coroutine_handle<promise_type> h_;
+};
+#endif
 
 static void glfw_error_callback(int error, const char* description) {
     fprintf(stderr, "Glfw Error %d: %s\n", error, description);
@@ -190,17 +218,6 @@ fzero(const std::function<double(double)>& f, double& b, double c, const double 
     return 1;
 }
 
-struct coroutine {
-    struct promise_type {
-        coroutine get_return_object() { return {.h_ = std::coroutine_handle<promise_type>::from_promise(*this)}; }
-        std::suspend_never initial_suspend() { return {}; }
-        std::suspend_always final_suspend() noexcept { return {}; }
-        void unhandled_exception() {}
-        void return_void() {}
-    };
-    std::coroutine_handle<promise_type> h_;
-};
-
 int main() {
     glfwSetErrorCallback(glfw_error_callback);
 
@@ -368,7 +385,11 @@ int main() {
                     } else {
                         vendors.insert({vendor, {driver}});
                     }
-                    co_await std::suspend_always{};
+                    #if defined(__clang__)
+                        co_await std::experimental::suspend_always{};
+                    #else
+                        co_await std::suspend_always{};                        
+                    #endif
                 }
             }
         }

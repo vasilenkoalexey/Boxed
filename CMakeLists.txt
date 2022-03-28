@@ -64,7 +64,7 @@ set(JSON_ImplicitConversions
 
 target_link_libraries(boxed glfw glew_s nlohmann_json::nlohmann_json)
 
-if(WIN32)
+if(MSVC)
   target_link_options(boxed PRIVATE "/SUBSYSTEM:WINDOWS"
                       "/ENTRY:mainCRTStartup")
 endif()
