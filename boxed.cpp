@@ -282,7 +282,7 @@ int main() {
     };
 
     constexpr int id0 = 14666;
-    constexpr int id1 = 14666;
+    constexpr int id1 = 14667;
     constexpr int id2 = 14668;
 
     static double rg = 0.01; /* Output resistance of source or amplifier */
@@ -308,7 +308,7 @@ int main() {
         fp *= gap;
     }
 
-    static std::map<std::string, std::vector<driver_model>> vendors;
+    static std::vector<std::pair<std::string, std::vector<driver_model>>> vendors;
 
     auto load = [&]() -> coroutine {
         for (const auto& entry : std::filesystem::directory_iterator{"./drivers"}) {
@@ -379,17 +379,17 @@ int main() {
                     continue;
                 }
                 if (!vendor.empty() && !driver.model.empty()) {
-                    const auto drivers = vendors.find(vendor);
+                    const auto drivers = std::ranges::find_if(vendors, [&vendor](const auto& e) { return e.first == vendor; });
                     if (drivers != vendors.end()) {
                         drivers->second.emplace_back(driver);
                     } else {
-                        vendors.insert({vendor, {driver}});
+                        vendors.emplace_back(std::make_pair(vendor, std::vector<driver_model>{driver}));
                     }
-                    #if defined(__clang__)
-                        co_await std::experimental::suspend_always{};
-                    #else
-                        co_await std::suspend_always{};                        
-                    #endif
+#if defined(__clang__)
+                    co_await std::experimental::suspend_always{};
+#else
+                    co_await std::suspend_always{};
+#endif
                 }
             }
         }
@@ -443,35 +443,25 @@ int main() {
 
                 ImGui::Combo(
                     "Vendor", &index_vendor, [](void* map, int idx, const char** out_text) {
-                        auto it = static_cast<std::map<std::string, std::vector<driver_model>>*>(map)->cbegin();
-                        std::advance(it, idx);
-                        *out_text = it->first.data();
+                        *out_text = static_cast<std::vector<std::pair<std::string, std::vector<driver_model>>>*>(map)->at(idx).first.c_str();
                         return true;
                     },
                     static_cast<void*>(&vendors), static_cast<int>(vendors.size()), 25);
+
                 if (index_vendor_prev != index_vendor) {
                     index_model = 0;
                 }
 
-                auto it_vendor = vendors.begin();
-                std::advance(it_vendor, index_vendor);
+                const auto vendor = &vendors.at(index_vendor).second;
                 ImGui::Combo(
-                    "Model", &index_model,
-                    [](void* vector, int idx, const char** out_text) {
-                        auto it = static_cast<std::vector<driver_model>*>(vector)->cbegin();
-                        std::advance(it, idx);
-                        *out_text = it->model.data();
+                    "Model", &index_model, [](void* vector, int idx, const char** out_text) {
+                        *out_text = static_cast<std::vector<driver_model>*>(vector)->at(idx).model.c_str();
                         return true;
                     },
-                    static_cast<void*>(&it_vendor->second),
-                    static_cast<int>(it_vendor->second.size()), 25);
+                    static_cast<void*>(vendor), static_cast<int>(vendor->size()), 25);
 
-                auto it_driver = it_vendor->second.begin();
-                std::advance(it_driver, index_model);
-
-                if (index_vendor_prev != index_vendor ||
-                    index_model_prev != index_model) {
-                    driver = *it_driver;
+                if (index_vendor_prev != index_vendor || index_model_prev != index_model) {
+                    driver = vendor->at(index_model);
                     fit_g = true;
                     fit_phg = true;
                     fit_zvc = true;
@@ -499,9 +489,7 @@ int main() {
                     index_vendor = 0;
                     index_model = 0;
 
-                    it_vendor = vendors.begin();
-                    it_driver = it_vendor->second.begin();
-                    driver = *it_driver;
+                    driver = vendors.front().second.front();
 
                     fit_g = true;
                     fit_phg = true;
@@ -513,68 +501,67 @@ int main() {
                     fit_spl = true;
                 }
 
-                const bool driver_modified = (driver != *it_driver);
+                const bool driver_modified = (!vendor->empty() && driver != vendor->at(index_model));
 
                 if (!driver_modified) {
                     ImGui::BeginDisabled();
                 }
                 const ImVec2 size = ImVec2(50.f, 0.f);
                 if (ImGui::Button("Save", size)) {
-                    *it_driver = driver;
-
+                    vendor->at(index_model) = driver;
                     nlohmann::json json;
-                    json["vendor"] = it_vendor->first;
-                    json["model"] = it_driver->model;
-                    json["mms"] = round<double, 4>(it_driver->mms);
-                    json["cms"] = round<double, 7>(it_driver->cms);
-                    json["re"] = round<double, 3>(it_driver->re);
-                    json["bl"] = round<double, 5>(it_driver->bl);
-                    if (it_driver->rms > .0) {
-                        json["rms"] = round<double, 5>(it_driver->rms);
+                    json["vendor"] = vendors.at(index_vendor).first;
+                    json["model"] = driver.model;
+                    json["mms"] = round<double, 4>(driver.mms);
+                    json["cms"] = round<double, 7>(driver.cms);
+                    json["re"] = round<double, 3>(driver.re);
+                    json["bl"] = round<double, 5>(driver.bl);
+                    if (driver.rms > .0) {
+                        json["rms"] = round<double, 5>(driver.rms);
                     }
-                    json["sd"] = round<double, 5>(it_driver->sd);
-                    json["le"] = round<double, 6>(it_driver->le);
-                    if (it_driver->fs > .0) {
-                        json["fs"] = round<double, 3>(it_driver->fs);
+                    json["sd"] = round<double, 5>(driver.sd);
+                    json["le"] = round<double, 6>(driver.le);
+                    if (driver.fs > .0) {
+                        json["fs"] = round<double, 3>(driver.fs);
                     }
-                    if (it_driver->qes > .0) {
-                        json["qes"] = round<double, 3>(it_driver->qes);
+                    if (driver.qes > .0) {
+                        json["qes"] = round<double, 3>(driver.qes);
                     }
-                    if (it_driver->qms > .0) {
-                        json["qms"] = round<double, 3>(it_driver->qms);
+                    if (driver.qms > .0) {
+                        json["qms"] = round<double, 3>(driver.qms);
                     }
-                    if (it_driver->qts > .0) {
-                        json["qts"] = round<double, 3>(it_driver->qts);
+                    if (driver.qts > .0) {
+                        json["qts"] = round<double, 3>(driver.qts);
                     }
-                    json["vas"] = round<double, 5>(it_driver->vas);
-                    if (it_driver->xmax > .0) {
-                        json["xmax"] = round<double, 4>(it_driver->xmax);
+                    json["vas"] = round<double, 5>(driver.vas);
+                    if (driver.xmax > .0) {
+                        json["xmax"] = round<double, 4>(driver.xmax);
                     }
-                    if (it_driver->xmech > .0) {
-                        json["xmech"] = round<double, 4>(it_driver->xmech);
+                    if (driver.xmech > .0) {
+                        json["xmech"] = round<double, 4>(driver.xmech);
                     }
-                    if (it_driver->pe > .0) {
-                        json["pe"] = round<double, 1>(it_driver->pe);
+                    if (driver.pe > .0) {
+                        json["pe"] = round<double, 1>(driver.pe);
                     }
-                    if (it_driver->depth > .0) {
-                        json["depth"] = round<double, 1>(it_driver->depth);
+                    if (driver.depth > .0) {
+                        json["depth"] = round<double, 1>(driver.depth);
                     }
-                    if (it_driver->mdepth > .0) {
-                        json["mdepth"] = round<double, 1>(it_driver->mdepth);
+                    if (driver.mdepth > .0) {
+                        json["mdepth"] = round<double, 1>(driver.mdepth);
                     }
-                    if (it_driver->mdia > .0) {
-                        json["mdia"] = round<double, 1>(it_driver->mdia);
+                    if (driver.mdia > .0) {
+                        json["mdia"] = round<double, 1>(driver.mdia);
                     }
-                    if (it_driver->vcd > .0) {
-                        json["vcd"] = round<double, 1>(it_driver->vcd);
+                    if (driver.vcd > .0) {
+                        json["vcd"] = round<double, 1>(driver.vcd);
                     }
-                    std::ofstream o(it_vendor->first + " " + it_driver->model + ".json");
+                    std::ofstream o(vendors.at(index_vendor).first + " " + driver.model + ".json");
                     o << std::setw(4) << json << std::endl;
                 }
 
                 ImGui::SameLine();
                 if (ImGui::Button("Reset", size)) {
-                    driver = *it_driver;
+                    driver = vendor->at(index_model);
                 }
 
                 if (!driver_modified) {
@@ -762,8 +749,7 @@ int main() {
         const double cab = vb / (rh0 * c * c);
 
         /* Cas - acoustic compliance of driver suspension */
-        const double cas =
-            (driver.vas > .0) ? driver.vas / (rh0 * c * c) : sd2 * driver.cms;
+        const double cas = (driver.vas > .0) ? driver.vas / (rh0 * c * c) : sd2 * driver.cms;
 
         /* Wb */
         const double wb = 2. * std::numbers::pi * fb;
@@ -892,8 +878,7 @@ int main() {
             /* Port sound pressure level */
             enclosure.splp = 79.6 + 20. * std::log10(std::abs(up_spl * rh0 * s));
             /* Overall sound pressure level */
-            enclosure.spl =
-                79.6 + 20. * std::log10(std::abs((up_spl - ud_spl) * s * rh0));
+            enclosure.spl = 79.6 + 20. * std::log10(std::abs((up_spl - ud_spl) * s * rh0));
 
             const std::complex ze = rel + s * lceb + 1. / (s * cmep);
             const std::complex zs = parallel3(res, s * lces, 1. / (s * cmes));
@@ -1212,7 +1197,6 @@ int main() {
                             ImGui::MenuItem("Crosshairs", NULL, &show_сrosshairs);
                             ImGui::EndPopup();
                         }
-
                         ImPlot::EndPlot();
                     }
                     ImGui::EndTabItem();
