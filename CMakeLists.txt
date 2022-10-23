@@ -2,10 +2,10 @@
 
 project("Boxed")
 
-set(GLFW glfw-3.3.5)
+set(GLFW glfw-3.3.8)
 set(GLEW glew-2.2.0)
-set(IMGUI imgui-1.85)
-set(JSON json-3.10.4)
+set(IMGUI imgui-1.88)
+set(JSON json-3.11.2)
 
 add_subdirectory(${PROJECT_SOURCE_DIR}/${GLFW} EXCLUDE_FROM_ALL)
 add_subdirectory(${PROJECT_SOURCE_DIR}/${GLEW}/build/cmake EXCLUDE_FROM_ALL)
@@ -14,24 +14,14 @@ add_subdirectory(${PROJECT_SOURCE_DIR}/${JSON} EXCLUDE_FROM_ALL)
 add_executable(
   boxed
   "boxed.cpp"
-  "implot.h"
-  "implot_internal.h"
   "implot.cpp"
   "implot_items.cpp"
-  ${IMGUI}/imconfig.h
   ${IMGUI}/imgui.cpp
-  ${IMGUI}/imgui.h
   ${IMGUI}/imgui_draw.cpp
-  ${IMGUI}/imgui_internal.h
   ${IMGUI}/imgui_tables.cpp
   ${IMGUI}/imgui_widgets.cpp
-  ${IMGUI}/imstb_rectpack.h
-  ${IMGUI}/imstb_textedit.h
-  ${IMGUI}/imstb_truetype.h
   ${IMGUI}/backends/imgui_impl_glfw.cpp
-  ${IMGUI}/backends/imgui_impl_glfw.h
-  ${IMGUI}/backends/imgui_impl_opengl2.cpp
-  ${IMGUI}/backends/imgui_impl_opengl2.h)
+  ${IMGUI}/backends/imgui_impl_opengl2.cpp)
 
 set_target_properties(boxed PROPERTIES CXX_STANDARD 20)
 
@@ -69,8 +59,8 @@ if(MSVC)
                       "/ENTRY:mainCRTStartup")
 endif()
 
-if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fcoroutines")
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fcoroutines")
 endif()
 
 target_include_directories(boxed PRIVATE ${PROJECT_SOURCE_DIR}/${GLEW}/include)

@@ -1,10 +1,10 @@
 #include <complex>
+#include <coroutine>
 #include <filesystem>
 #include <fstream>
 #include <numbers>
 #include <ranges>
 #include <vector>
-#include <coroutine>
 
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
@@ -838,8 +838,7 @@ int main() {
 
             const std::complex z3 = parallel2(zaa_prev, ral);
 
-            const std::complex u0_prev =
-                pg * z3 / (zab_prev * z3 + zas_prev * (zab_prev + z3));
+            const std::complex u0_prev = pg * z3 / (zab_prev * z3 + zas_prev * (zab_prev + z3));
             const std::complex g_prev = s_prev * mas * u0_prev / pg;
             const double phg_prev = phase(g_prev);
             /* Group delay */
@@ -908,13 +907,14 @@ int main() {
         ImGui::SetNextWindowPos(viewport->Pos);
         ImGui::SetNextWindowSize(viewport->Size);
         if (ImGui::Begin("Plot", NULL, ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings)) {
-            const ImPlotFlags flagsPlot = ImPlotFlags_NoTitle | ImPlotFlags_AntiAliased | ImPlotFlags_NoLegend | ImPlotFlags_NoMenus | ImPlotFlags_NoBoxSelect | ImPlotFlags_NoMouseText;
+            const ImPlotFlags flagsPlot = ImPlotFlags_NoTitle | ImPlotFlags_NoLegend | ImPlotFlags_NoMenus | ImPlotFlags_NoBoxSelect | ImPlotFlags_NoMouseText;
             ImPlot::PushStyleColor(ImPlotCol_FrameBg, IM_COL32_BLACK_TRANS);
 
             if (ImGui::BeginTabBar("Plots")) {
                 if (ImGui::BeginTabItem("Response")) {
                     if (ImPlot::BeginPlot("##plot", ImVec2(-1, -1), flagsPlot)) {
-                        ImPlot::SetupAxes("Frequency [Hz]", "Response [dB]", ImPlotAxisFlags_LogScale);
+                        ImPlot::SetupAxes("Frequency [Hz]", "Response [dB]", ImPlotAxisFlags_NoSideSwitch | ImPlotAxisFlags_NoHighlight, ImPlotAxisFlags_NoSideSwitch | ImPlotAxisFlags_NoHighlight);
+                        ImPlot::SetupAxisScale(ImAxis_X1, ImPlotScale_Log10);
                         ImPlot::SetupAxisLimits(ImAxis_X1, freq.front(), freq.back(), ImPlotCond_Always);
 
                         const auto [min, max] = std::ranges::minmax(g);
@@ -964,7 +964,8 @@ int main() {
                                 l1.push_back(i);
                             }
                         }
-                        ImPlot::SetupAxes("Frequency [Hz]", "Response phase [deg]", ImPlotAxisFlags_LogScale);
+                        ImPlot::SetupAxes("Frequency [Hz]", "Response phase [deg]", ImPlotAxisFlags_NoSideSwitch | ImPlotAxisFlags_NoHighlight, ImPlotAxisFlags_NoSideSwitch | ImPlotAxisFlags_NoHighlight);
+                        ImPlot::SetupAxisScale(ImAxis_X1, ImPlotScale_Log10);
 
                         const auto [min, max] = std::ranges::minmax(phg);
                         const double d = (max - min) * .1;
@@ -995,7 +996,8 @@ int main() {
 
                 if (ImGui::BeginTabItem("Group delay")) {
                     if (ImPlot::BeginPlot("##plot", ImVec2(-1, -1), flagsPlot)) {
-                        ImPlot::SetupAxes("Frequency [Hz]", "Group delay [sec]", ImPlotAxisFlags_LogScale);
+                        ImPlot::SetupAxes("Frequency [Hz]", "Group delay [sec]", ImPlotAxisFlags_NoSideSwitch | ImPlotAxisFlags_NoHighlight, ImPlotAxisFlags_NoSideSwitch | ImPlotAxisFlags_NoHighlight);
+                        ImPlot::SetupAxisScale(ImAxis_X1, ImPlotScale_Log10);
                         ImPlot::SetupAxisLimits(ImAxis_X1, freq.front(), freq.back(), ImPlotCond_Always);
 
                         const auto [min, max] = std::ranges::minmax(gd);
@@ -1025,7 +1027,8 @@ int main() {
 
                 if (ImGui::BeginTabItem("Cone excursion")) {
                     if (ImPlot::BeginPlot("##plot", ImVec2(-1, -1), flagsPlot)) {
-                        ImPlot::SetupAxes("Frequency [Hz]", "Cone excursion [m]", ImPlotAxisFlags_LogScale);
+                        ImPlot::SetupAxes("Frequency [Hz]", "Cone excursion [m]", ImPlotAxisFlags_NoSideSwitch | ImPlotAxisFlags_NoHighlight, ImPlotAxisFlags_NoSideSwitch | ImPlotAxisFlags_NoHighlight);
+                        ImPlot::SetupAxisScale(ImAxis_X1, ImPlotScale_Log10);
                         ImPlot::SetupAxisLimits(ImAxis_X1, freq.front(), freq.back(), ImPlotCond_Always);
 
                         const auto [min, max] = std::ranges::minmax(x);
@@ -1073,7 +1076,8 @@ int main() {
 
                 if (ImGui::BeginTabItem("Port air velocity")) {
                     if (ImPlot::BeginPlot("##plot", ImVec2(-1, -1), flagsPlot)) {
-                        ImPlot::SetupAxes("Frequency [Hz]", "Port air velocity [m/sec]", ImPlotAxisFlags_LogScale);
+                        ImPlot::SetupAxes("Frequency [Hz]", "Port air velocity [m/sec]", ImPlotAxisFlags_NoSideSwitch | ImPlotAxisFlags_NoHighlight, ImPlotAxisFlags_NoSideSwitch | ImPlotAxisFlags_NoHighlight);
+                        ImPlot::SetupAxisScale(ImAxis_X1, ImPlotScale_Log10);
                         ImPlot::SetupAxisLimits(ImAxis_X1, freq.front(), freq.back(), ImPlotCond_Always);
                         const auto [min, max] = std::ranges::minmax(v);
                         const double d = (max - min) * .1;
@@ -1113,7 +1117,8 @@ int main() {
 
                 if (ImGui::BeginTabItem("Voice-coil impedance magnitude")) {
                     if (ImPlot::BeginPlot("##plot", ImVec2(-1, -1), flagsPlot)) {
-                        ImPlot::SetupAxes("Frequency [Hz]", "Voice-coil impedance magnitude [ohms]", ImPlotAxisFlags_LogScale);
+                        ImPlot::SetupAxes("Frequency [Hz]", "Voice-coil impedance magnitude [ohms]", ImPlotAxisFlags_NoSideSwitch | ImPlotAxisFlags_NoHighlight, ImPlotAxisFlags_NoSideSwitch | ImPlotAxisFlags_NoHighlight);
+                        ImPlot::SetupAxisScale(ImAxis_X1, ImPlotScale_Log10);
                         ImPlot::SetupAxisLimits(ImAxis_X1, freq.front(), freq.back(), ImPlotCond_Always);
 
                         const auto [min, max] = std::ranges::minmax(zvc);
@@ -1148,7 +1153,8 @@ int main() {
 
                 if (ImGui::BeginTabItem("Voice-coil impedance phase")) {
                     if (ImPlot::BeginPlot("##plot", ImVec2(-1, -1), flagsPlot)) {
-                        ImPlot::SetupAxes("Frequency [Hz]", "Voice-coil impedance phase [deg]", ImPlotAxisFlags_LogScale);
+                        ImPlot::SetupAxes("Frequency [Hz]", "Voice-coil impedance phase [deg]", ImPlotAxisFlags_NoSideSwitch | ImPlotAxisFlags_NoHighlight, ImPlotAxisFlags_NoSideSwitch | ImPlotAxisFlags_NoHighlight);
+                        ImPlot::SetupAxisScale(ImAxis_X1, ImPlotScale_Log10);
                         ImPlot::SetupAxisLimits(ImAxis_X1, freq.front(), freq.back(), ImPlotCond_Always);
 
                         const auto [min, max] = std::ranges::minmax(phzvc);
@@ -1183,7 +1189,8 @@ int main() {
 
                 if (ImGui::BeginTabItem("Sound Pressure Level")) {
                     if (ImPlot::BeginPlot("##plot", ImVec2(-1, -1), flagsPlot)) {
-                        ImPlot::SetupAxes("Frequency [Hz]", "Sound Pressure Level [dB]", ImPlotAxisFlags_LogScale);
+                        ImPlot::SetupAxes("Frequency [Hz]", "Sound Pressure Level [dB]", ImPlotAxisFlags_NoSideSwitch | ImPlotAxisFlags_NoHighlight, ImPlotAxisFlags_NoSideSwitch | ImPlotAxisFlags_NoHighlight);
+                        ImPlot::SetupAxisScale(ImAxis_X1, ImPlotScale_Log10);
                         ImPlot::SetupAxisLimits(ImAxis_X1, freq.front(), freq.back(), ImPlotCond_Always);
                         const auto [min, max] = std::ranges::minmax(spl);
                         const double d = (max - min) * .1;
