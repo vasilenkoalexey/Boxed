@@ -4,6 +4,7 @@
 #include <numbers>
 #include <ranges>
 #include <vector>
+#include <coroutine>
 
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
@@ -13,23 +14,6 @@
 #include "imgui.h"
 #include "implot.h"
 #include "nlohmann/json.hpp"
-
-#if defined(__clang__)
-
-#include <experimental/coroutine>
-
-struct coroutine {
-    struct promise_type {
-        coroutine get_return_object() { return {.h_ = std::experimental::coroutine_handle<promise_type>::from_promise(*this)}; }
-        std::experimental::suspend_never initial_suspend() { return {}; }
-        std::experimental::suspend_always final_suspend() noexcept { return {}; }
-        void unhandled_exception() {}
-        void return_void() {}
-    };
-    std::experimental::coroutine_handle<promise_type> h_;
-};
-#else
-#include <coroutine>
 
 struct coroutine {
     struct promise_type {
@@ -41,7 +25,6 @@ struct coroutine {
     };
     std::coroutine_handle<promise_type> h_;
 };
-#endif
 
 static void glfw_error_callback(int error, const char* description) {
     fprintf(stderr, "Glfw Error %d: %s\n", error, description);
@@ -385,11 +368,7 @@ int main() {
                     } else {
                         vendors.emplace_back(std::make_pair(vendor, std::vector<driver_model>{driver}));
                     }
-#if defined(__clang__)
-                    co_await std::experimental::suspend_always{};
-#else
                     co_await std::suspend_always{};
-#endif
                 }
             }
         }
