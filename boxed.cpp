@@ -1,3 +1,25 @@
+// MIT License
+
+// Copyright (c) 2022 Vasilenko Alexey
+
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
 #include <complex>
 #include <coroutine>
 #include <filesystem>
@@ -30,9 +52,8 @@ static void glfw_error_callback(int error, const char* description) {
     fprintf(stderr, "Glfw Error %d: %s\n", error, description);
 }
 
-template <class T, int P>
-static T round(T a) {
-    static_assert(std::is_floating_point<T>::value, "Round<T>: T must be floating point");
+template <class T, int P, typename = std::enable_if_t<std::is_floating_point<T>::value>>
+T round(T a) {
     const T shift = std::pow(static_cast<T>(10.0), P);
     return std::round(a * shift) / shift;
 }
@@ -40,6 +61,12 @@ static T round(T a) {
 template <class T, int ULP>
 typename std::enable_if<!std::numeric_limits<T>::is_integer, bool>::type almost_equal(T x, T y) {
     return std::fabs(x - y) <= std::numeric_limits<T>::epsilon() * std::fabs(x + y) * ULP || std::fabs(x - y) < std::numeric_limits<T>::min();
+}
+
+template <typename T,
+          typename = std::enable_if_t<std::is_same<double, typename std::remove_cv<T>::type>::value || std::is_same<std::complex<double>, typename std::remove_cv<T>::type>::value>>
+T parallel(const std::vector<T>& rs) {
+    return 1.0 / std::accumulate(rs.begin(), rs.end(), T{}, [](T a, T b) { return a + 1.0 / b; });
 }
 
 static double fmin(const std::function<double(double)>& f, double& a, double b) {
@@ -785,14 +812,6 @@ int main() {
                 return degrees(std::atan(arg.imag() / arg.real()));
             };
 
-            const auto parallel2 = [](const auto z0, const auto z1) {
-                return (z0 * z1) / (z0 + z1);
-            };
-
-            const auto parallel3 = [](const auto z0, const auto z1, const auto z2) {
-                return (z0 * z1 * z2) / (z0 * z1 + z1 * z2 + z2 * z0);
-            };
-
             /* Map - acoustic mass of port including air load */
             const double map = calc_lpa() * rh0 / sp;
             /* Cmep */
@@ -803,15 +822,15 @@ int main() {
             const std::complex zas = rat + s * mas + 1. / (s * cas);
             const std::complex zab = 1. / (s * cab);
 
-            const std::complex z0 = parallel2(zab, ral);
+            const std::complex z0 = parallel<std::complex<double>>({zab, ral});
 
             /* Up - volume velocity of port */
             const std::complex up = pg * z0 / (zaa * z0 + zas * (zaa + z0));
 
             const std::complex up_spl = pg_spl * z0 / (zaa * z0 + zas * (zaa + z0));
 
-            const std::complex z1 = zas + parallel3(zaa, zab, ral);
-            const std::complex z2 = parallel2(zaa, ral);
+            const std::complex z1 = zas + parallel<std::complex<double>>({zaa, zab, ral});
+            const std::complex z2 = parallel<std::complex<double>>({zaa, ral});
 
             /* U0 - total volume velocity leaving enclosure boundaries */
             const std::complex u0 = pg * z2 / (zab * z2 + zas * (zab + z2));
@@ -836,7 +855,7 @@ int main() {
             const std::complex zaa_prev = s_prev * map;
             const std::complex zab_prev = 1. / (s_prev * cab);
 
-            const std::complex z3 = parallel2(zaa_prev, ral);
+            const std::complex z3 = parallel<std::complex<double>>({zaa_prev, ral});
 
             const std::complex u0_prev = pg * z3 / (zab_prev * z3 + zas_prev * (zab_prev + z3));
             const std::complex g_prev = s_prev * mas * u0_prev / pg;
@@ -859,8 +878,8 @@ int main() {
             enclosure.spl = 79.6 + 20. * std::log10(std::abs((up_spl - ud_spl) * s * rh0));
 
             const std::complex ze = rel + s * lceb + 1. / (s * cmep);
-            const std::complex zs = parallel3(res, s * lces, 1. / (s * cmes));
-            const std::complex zm = parallel2(ze, zs);
+            const std::complex zs = parallel<std::complex<double>>({res, s * lces, 1. / (s * cmes)});
+            const std::complex zm = parallel<std::complex<double>>({ze, zs});
             /* Voice-coil impedance */
             const std::complex zvc = driver.re + s * driver.le + zm;
             enclosure.zvc = std::abs(zvc);
