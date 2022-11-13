@@ -301,10 +301,11 @@ int main() {
     static double fb;         /* Box Tuning Frequency */
     static double sp = .0001; /* Port Area */
     static const double sp_min = .0001;
-    static double eg = .0;     /* Open-circuit output voltage of source */
+//    static double eg = .0;     
     static double k = 0.732;   /* End Correction factor */
     static double rh0 = 1.184; /* Dencity of air */
     static double c = 346.1;   /* Velocity of sound in air */
+    static double pe = .1;
 
     static const double f64_zero = 0.;
 
@@ -667,100 +668,46 @@ int main() {
                 ImGui::End();
             }
         }
+        
+        static int voice_coil_connection = 0;
+        static int driver_count = 1;
+        
+        if (driver_count < 1) {
+            driver_count = 1;
+        }        
 
-        const double sd2 = std::pow(driver.sd, 2.);
-        const double bl2 = std::pow(driver.bl, 2.);
-
-        const double eg_max = std::sqrt(driver.pe * driver.re);
+        const double pe_max = driver.pe * driver_count;
 
         if (index_vendor_prev != index_vendor || index_model_prev != index_model) {
-            eg = (eg_max > .0) ? eg_max : 1.;
+            pe = pe_max;
             const double fs = (driver.fs > .0) ? driver.fs : 1. / (2. * std::numbers::pi * std::sqrt(driver.cms * driver.mms));
-            const double vas = (driver.vas > .0) ? driver.vas : rh0 * std::pow(c, 2.) * sd2 * driver.cms;
-            const double qes = (driver.qes > .0) ? driver.qes : std::sqrt(driver.mms / driver.cms) * driver.re / bl2;
+            const double vas = (driver.vas > .0) ? driver.vas : rh0 * std::pow(c, 2.) * std::pow(driver.sd, 2.) * driver.cms;
+            const double qes = (driver.qes > .0) ? driver.qes : std::sqrt(driver.mms / driver.cms) * driver.re / std::pow(driver.bl, 2.);
             const double qms = (driver.qms > .0) ? driver.qms : std::sqrt(driver.mms / driver.cms) / driver.rms;
             const double qts = (driver.qts > .0) ? driver.qts : qms * qes / (qms + qes);
             vb = vas * std::pow(qts / 0.4, 3.) / 1.1;
             fb = fs * 0.42 / qts;
+        } else if(pe > pe_max) {
+            pe = pe_max;
         }
 
-        const auto calc_lpa = [&]() {
-            return std::pow(c, 2.) * sp / (std::pow(2. * std::numbers::pi, 2.) * std::pow(fb, 2.) * vb);
-        };
+        double re = (voice_coil_connection == 0) ? driver.re / driver_count : driver.re * driver_count;
+        const double le = (voice_coil_connection == 0) ? driver.le / driver_count : driver.le * driver_count;
+        const double sd = driver.sd * driver_count;        
+        const double mms = driver.mms * driver_count;
+        const double vas = driver.vas * driver_count;
 
-        if (show_design) {
-            ImGui::SetNextWindowSizeConstraints(ImVec2(400, 0), ImVec2(400, FLT_MAX));
-            if (ImGui::Begin("Enclosure design", &show_design, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse)) {
-                ImGui::PushItemWidth(180);
-
-                if (ImGui::CollapsingHeader("Box", ImGuiTreeNodeFlags_SpanFullWidth)) {
-                    static const double vbl_min = 1.;
-                    double vbl = 1000. * vb;
-                    ImGui::DragScalar("Volume", ImGuiDataType_Double, &vbl, .01f, &vbl_min, nullptr, "Vb %.2f L", ImGuiSliderFlags_AlwaysClamp);
-                    vb = vbl / 1000.;
-
-                    static const double fb_min = 10.;
-                    ImGui::DragScalar("Tuning Frequency", ImGuiDataType_Double, &fb, 0.01f, &fb_min, nullptr, "Fb %.2f Hz", ImGuiSliderFlags_AlwaysClamp);
-
-                    static const double ql_max = 30.;
-                    static const double ql_min = 3.;
-                    ImGui::SliderScalar("Leakage Q", ImGuiDataType_Double, &ql, &ql_min, &ql_max, "Ql %.f", ImGuiSliderFlags_AlwaysClamp);
-                }
-
-                if (ImGui::CollapsingHeader("Port")) {
-                    ImGui::DragScalar("Area", ImGuiDataType_Double, &sp, 0.00001f, &sp_min, nullptr, "Sp %.5f m2", ImGuiSliderFlags_AlwaysClamp);
-
-                    double dp = 2. * std::sqrt(sp / std::numbers::pi);
-                    ImGui::BeginDisabled();
-                    ImGui::DragScalar("Diameter", ImGuiDataType_Double, &dp, .0f, nullptr, nullptr, "Dp %.4f m");
-
-                    static double hp = .01;
-                    double wp = sp / hp;
-                    if (wp < 0.01) {
-                        wp = 0.01;
-                    }
-                    ImGui::DragScalar("Width", ImGuiDataType_Double, &wp, .0f, nullptr, nullptr, "Wp %.3f m");
-                    ImGui::EndDisabled();
-
-                    const double hp_max = std::sqrt(sp);
-                    if (hp > hp_max) {
-                        hp = hp_max;
-                    }
-                    static const double hp_min = .01;
-                    ImGui::SliderScalar("Height", ImGuiDataType_Double, &hp, &hp_min, &hp_max, "Hp %.3f m", ImGuiSliderFlags_AlwaysClamp);
-
-                    static const double k_min = 0.;
-                    ImGui::DragScalar("End correction", ImGuiDataType_Double, &k, .0001f, &k_min, nullptr, "k %.3f");
-
-                    double lpa = calc_lpa();
-                    double lpm = lpa - k * dp;
-                    if (lpm < .0) {
-                        lpm = .0;
-                    }
-                    ImGui::BeginDisabled();
-                    ImGui::DragScalar("Length", ImGuiDataType_Double, &lpm, .0f, nullptr, nullptr, "Lp %.3f m");
-                    ImGui::DragScalar("Length acoustical", ImGuiDataType_Double, &lpa, .0f, nullptr, nullptr, "Lpa %.3f m");
-                    ImGui::EndDisabled();
-                }
-                ImGui::PopItemWidth();
-                ImGui::End();
-            }
-        }
-
-        if (eg_max > .0 && eg > eg_max) {
-            eg = eg_max;
-        }
+        const double sd2 = std::pow(sd, 2.);
+        const double bl2 = std::pow(driver.bl, 2.);
 
         /* Cab - Acoustic compliance of air in enclosure */
         const double cab = vb / (rh0 * c * c);
-
         /* Cas - acoustic compliance of driver suspension */
-        const double cas = (driver.vas > .0) ? driver.vas / (rh0 * c * c) : sd2 * driver.cms;
-
+        const double cas = (vas > .0) ? vas / (rh0 * c * c) : sd2 * driver.cms;
         /* Wb */
         const double wb = 2. * std::numbers::pi * fb;
         /* Cmes - electrical capacitance due to driver mass */
-        const double cmes = driver.mms / bl2;
+        const double cmes = mms / bl2;
         /* Lces - electrical inductance due to driver compliance */
         const double lces = driver.cms * bl2;
         /* Ras - acoustic resistance of driver suspension losses */
@@ -774,18 +721,22 @@ int main() {
         /* Rel - acoustic resistance of enclosure lossescaused by leakage */
         const double rel = bl2 / (sd2 * ral);
         /* Mas - acoustic mass of driver diaphragm assembly including air load */
-        const double mas = driver.mms / sd2;
+        const double mas = mms / sd2;
+        /* eg - Open-circuit output voltage of source */
+        const double eg = std::sqrt(pe * re);
         /* Pg - acoustic driving pressure */
-        const double pg = eg * driver.bl / ((rg + driver.re) * driver.sd);
+        const double pg = eg * driver.bl / ((rg + re) * sd);
 
-        const double eg_spl = std::sqrt(driver.re);
-        const double pg_spl = eg_spl * driver.bl / ((rg + driver.re) * driver.sd);
+        const double eg_spl = std::sqrt(re);
+        const double pg_spl = eg_spl * driver.bl / ((rg + re) * sd);
 
         /* Rat - acoustic resistance of total driver-circuit losses */
-        const double rat = ras + bl2 / (sd2 * (rg + driver.re));
+        const double rat = ras + bl2 / (sd2 * (rg + re));
 
+        const auto calc_lpa = [&]() {
+            return std::pow(c, 2.) * sp / (std::pow(2. * std::numbers::pi, 2.) * std::pow(fb, 2.) * vb);
+        };
         std::function<vented_box(const double)> calc_vented_box;
-
         calc_vented_box = [&](const double f) {
             const auto phase = [](const std::complex<double>& arg) {
                 const auto degrees = [](const double radians) {
@@ -841,7 +792,7 @@ int main() {
             const std::complex ud = pg / z1;
             const std::complex ud_spl = pg_spl / z1;
             /* Diaphragm dsiplacement */
-            enclosure.x = std::sqrt(2.) * std::abs(ud / (driver.sd * s));
+            enclosure.x = std::sqrt(2.) * std::abs(ud / (sd * s));
             /* Response */
             const std::complex g = s * mas * u0 / pg;
             enclosure.g = 20. * std::log10(std::abs(g));
@@ -881,7 +832,7 @@ int main() {
             const std::complex zs = parallel<std::complex<double>>({res, s * lces, 1. / (s * cmes)});
             const std::complex zm = parallel<std::complex<double>>({ze, zs});
             /* Voice-coil impedance */
-            const std::complex zvc = driver.re + s * driver.le + zm;
+            const std::complex zvc = re + s * le + zm;
             enclosure.zvc = std::abs(zvc);
             /* Voice-coil impedance phase */
             enclosure.phzvc = phase(zvc);
@@ -920,6 +871,75 @@ int main() {
             spld[i] = enclosure.spld;
             splp[i] = enclosure.splp;
             spl[i] = enclosure.spl;
+        }
+
+        if (show_design) {
+            ImGui::SetNextWindowSizeConstraints(ImVec2(400, 0), ImVec2(400, FLT_MAX));
+            if (ImGui::Begin("Enclosure design", &show_design, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse)) {
+                ImGui::PushItemWidth(180);
+
+                if (ImGui::CollapsingHeader("Driver", ImGuiTreeNodeFlags_SpanFullWidth)) {
+                    static const double pe_min = .1;
+                    ImGui::InputInt("Count", &driver_count);
+                    ImGui::Combo("Voice coil connection", &voice_coil_connection, "Parallel\0Serial\0\0");
+                    ImGui::DragScalar("Input power", ImGuiDataType_Double, &pe, .1f, &pe_min, &pe_max, "pe: %.1f W", ImGuiSliderFlags_AlwaysClamp);                                        
+                    ImGui::BeginDisabled();
+                    ImGui::DragScalar("Total Re", ImGuiDataType_Double, &re, .0f, nullptr, nullptr, "Re: %.3f Ohm");
+                    ImGui::EndDisabled();
+                }
+
+                if (ImGui::CollapsingHeader("Box", ImGuiTreeNodeFlags_SpanFullWidth)) {
+                    static const double vbl_min = 1.;
+                    double vbl = 1000. * vb;
+                    ImGui::DragScalar("Volume", ImGuiDataType_Double, &vbl, .01f, &vbl_min, nullptr, "Vb %.2f L", ImGuiSliderFlags_AlwaysClamp);
+                    vb = vbl / 1000.;
+
+                    static const double fb_min = 10.;
+                    ImGui::DragScalar("Tuning Frequency", ImGuiDataType_Double, &fb, 0.01f, &fb_min, nullptr, "Fb %.2f Hz", ImGuiSliderFlags_AlwaysClamp);
+
+                    static const double ql_max = 30.;
+                    static const double ql_min = 3.;
+                    ImGui::SliderScalar("Leakage Q", ImGuiDataType_Double, &ql, &ql_min, &ql_max, "Ql %.f", ImGuiSliderFlags_AlwaysClamp);
+                }
+
+                if (ImGui::CollapsingHeader("Port")) {
+                    ImGui::DragScalar("Area", ImGuiDataType_Double, &sp, 0.00001f, &sp_min, nullptr, "Sp %.5f m2", ImGuiSliderFlags_AlwaysClamp);
+
+                    double dp = 2. * std::sqrt(sp / std::numbers::pi);
+                    ImGui::BeginDisabled();
+                    ImGui::DragScalar("Diameter", ImGuiDataType_Double, &dp, .0f, nullptr, nullptr, "Dp %.4f m");
+
+                    static double hp = .01;
+                    double wp = sp / hp;
+                    if (wp < 0.01) {
+                        wp = 0.01;
+                    }
+                    ImGui::DragScalar("Width", ImGuiDataType_Double, &wp, .0f, nullptr, nullptr, "Wp %.3f m");
+                    ImGui::EndDisabled();
+
+                    const double hp_max = std::sqrt(sp);
+                    if (hp > hp_max) {
+                        hp = hp_max;
+                    }
+                    static const double hp_min = .01;
+                    ImGui::SliderScalar("Height", ImGuiDataType_Double, &hp, &hp_min, &hp_max, "Hp %.3f m", ImGuiSliderFlags_AlwaysClamp);
+
+                    static const double k_min = 0.;
+                    ImGui::DragScalar("End correction", ImGuiDataType_Double, &k, .0001f, &k_min, nullptr, "k %.3f");
+
+                    double lpa = calc_lpa();
+                    double lpm = lpa - k * dp;
+                    if (lpm < .0) {
+                        lpm = .0;
+                    }
+                    ImGui::BeginDisabled();
+                    ImGui::DragScalar("Length", ImGuiDataType_Double, &lpm, .0f, nullptr, nullptr, "Lp %.3f m");
+                    ImGui::DragScalar("Length acoustical", ImGuiDataType_Double, &lpa, .0f, nullptr, nullptr, "Lpa %.3f m");
+                    ImGui::EndDisabled();
+                }
+                ImGui::PopItemWidth();
+                ImGui::End();
+            }
         }
 
         const ImGuiViewport* viewport = ImGui::GetMainViewport();
@@ -1296,13 +1316,6 @@ int main() {
         if (show_options) {
             ImGui::SetNextWindowSizeConstraints(ImVec2(400, 0), ImVec2(400, FLT_MAX));
             if (ImGui::Begin("Options", &show_options, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse)) {
-                static const double eg_min = .1;
-                if (eg_max > .0) {
-                    ImGui::SliderScalar("Voltage of source", ImGuiDataType_Double, &eg, &eg_min, &eg_max, "eg: %.1f V", ImGuiSliderFlags_AlwaysClamp);
-                } else {
-                    ImGui::DragScalar("Voltage of source", ImGuiDataType_Double, &eg, .1f, &eg_min, nullptr, "eg: %.1f V", ImGuiSliderFlags_AlwaysClamp);
-                }
-
                 static const double rg_min = .0;
                 ImGui::DragScalar("Resistance of source", ImGuiDataType_Double, &rg, .01f, &rg_min, nullptr, "Rg: %.2f ohms", ImGuiSliderFlags_AlwaysClamp);
 
@@ -1316,14 +1329,6 @@ int main() {
         }
 
         ImGui::Render();
-        int display_w, display_h;
-        glfwGetFramebufferSize(window, &display_w, &display_h);
-        glViewport(0, 0, display_w, display_h);
-
-        const static ImVec4 clear_color = ImVec4(.45f, .55f, .6f, 1.f);
-        glClearColor(clear_color.x * clear_color.w, clear_color.y * clear_color.w, clear_color.z * clear_color.w, clear_color.w);
-        glClear(GL_COLOR_BUFFER_BIT);
-
         ImGui_ImplOpenGL2_RenderDrawData(ImGui::GetDrawData());
 
         glfwMakeContextCurrent(window);
