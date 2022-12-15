@@ -31,11 +31,11 @@
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 
-#include "backends/imgui_impl_glfw.h"
-#include "backends/imgui_impl_opengl2.h"
-#include "imgui.h"
-#include "implot.h"
-#include "nlohmann/json.hpp"
+#include <backends/imgui_impl_glfw.h>
+#include <backends/imgui_impl_opengl2.h>
+#include <imgui.h>
+#include <implot.h>
+#include <nlohmann/json.hpp>
 
 struct coroutine {
     struct promise_type {
@@ -301,7 +301,6 @@ int main() {
     static double fb;         /* Box Tuning Frequency */
     static double sp = .0001; /* Port Area */
     static const double sp_min = .0001;
-//    static double eg = .0;     
     static double k = 0.732;   /* End Correction factor */
     static double rh0 = 1.184; /* Dencity of air */
     static double c = 346.1;   /* Velocity of sound in air */
