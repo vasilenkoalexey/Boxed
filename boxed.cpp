@@ -734,8 +734,6 @@ int main() {
             const std::complex zas = rat + s * mas + 1. / (s * cas);
             const std::complex zab = 1. / (s * cab);
 
-            const std::complex<double> ralc = ral;
-
             const std::complex z0 = parallel(zab, ral);
 
             const std::complex up_spl = pg_spl * z0 / (zaa * z0 + zas * (zaa + z0));
