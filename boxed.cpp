@@ -63,10 +63,10 @@ typename std::enable_if<!std::numeric_limits<T>::is_integer, bool>::type almost_
     return std::fabs(x - y) <= std::numeric_limits<T>::epsilon() * std::fabs(x + y) * ULP || std::fabs(x - y) < std::numeric_limits<T>::min();
 }
 
-template <typename T,
-          typename = std::enable_if_t<std::is_same<double, typename std::remove_cv<T>::type>::value || std::is_same<std::complex<double>, typename std::remove_cv<T>::type>::value>>
-T parallel(const std::vector<T>& rs) {
-    return 1.0 / std::accumulate(rs.begin(), rs.end(), T{}, [](T a, T b) { return a + 1.0 / b; });
+template <typename... T, typename = typename std::enable_if<(true && ... && (std::is_same_v<T, double> || std::is_same_v<T, std::complex<double>>)), void>::type>
+auto parallel(const T... x)
+{
+    return 1. / (... += (1. / x));
 }
 
 static double fmin(const std::function<double(double)>& f, double& a, double b) {
@@ -278,19 +278,6 @@ int main() {
         bool operator==(const driver_model&) const = default;
     };
 
-    struct vented_box {
-        double g;
-        double phg;
-        double zvc;
-        double phzvc;
-        double gd;
-        double x;
-        double v;
-        double spld;
-        double splp;
-        double spl;
-    };
-
     constexpr int id0 = 14666;
     constexpr int id1 = 14667;
     constexpr int id2 = 14668;
@@ -389,10 +376,10 @@ int main() {
                     continue;
                 }
                 if (!vendor.empty() && !driver.model.empty()) {
-                    const auto drivers = std::ranges::find_if(vendors, [&vendor](const auto& e) { return e.first == vendor; });
-                    if (drivers != vendors.end()) {
+                    if (const auto drivers = std::ranges::find_if(vendors, [&vendor](const auto& e) { return e.first == vendor; }); drivers != vendors.end()) {
                         drivers->second.emplace_back(driver);
-                    } else {
+                    }
+                    else {
                         vendors.emplace_back(std::make_pair(vendor, std::vector<driver_model>{driver}));
                     }
                     co_await std::suspend_always{};
@@ -424,15 +411,6 @@ int main() {
         static bool show_design = true;
         static bool show_options = true;
         static bool show_сrosshairs = true;
-
-        static bool fit_g = true;
-        static bool fit_phg = true;
-        static bool fit_zvc = true;
-        static bool fit_phzvc = true;
-        static bool fit_gd = true;
-        static bool fit_x = true;
-        static bool fit_v = true;
-        static bool fit_spl = true;
 
         static driver_model driver{};
 
@@ -468,14 +446,7 @@ int main() {
 
                 if (index_vendor_prev != index_vendor || index_model_prev != index_model) {
                     driver = vendor->at(index_model);
-                    fit_g = true;
-                    fit_phg = true;
-                    fit_zvc = true;
-                    fit_phzvc = true;
-                    fit_gd = true;
-                    fit_x = true;
-                    fit_v = true;
-                    fit_spl = true;
+                    ImPlot::SetNextAxesToFit();
                 }
 
                 ImGui::EndGroup();
@@ -496,15 +467,7 @@ int main() {
                     index_model = 0;
 
                     driver = vendors.front().second.front();
-
-                    fit_g = true;
-                    fit_phg = true;
-                    fit_zvc = true;
-                    fit_phzvc = true;
-                    fit_gd = true;
-                    fit_x = true;
-                    fit_v = true;
-                    fit_spl = true;
+                    ImPlot::SetNextAxesToFit();
                 }
 
                 const bool driver_modified = (!vendor->empty() && driver != vendor->at(index_model));
@@ -644,7 +607,6 @@ int main() {
                     ImGui::DragScalar("Magnet Depth", ImGuiDataType_Double, &driver.mdepth, 0.1f, &f64_zero, nullptr, "%.1f mm", ImGuiSliderFlags_AlwaysClamp);
                     ImGui::DragScalar("Magnet Diameter", ImGuiDataType_Double, &driver.mdia, 0.1f, &f64_zero, nullptr, "%.1f mm", ImGuiSliderFlags_AlwaysClamp);
                     ImGui::DragScalar("Voice Coil Diameter", ImGuiDataType_Double, &driver.vcd, 0.1f, &f64_zero, nullptr, "%.1f mm", ImGuiSliderFlags_AlwaysClamp);
-                    static double vol = .0;
                     /* magnet volume */
                     const double mv = std::numbers::pi * std::pow(driver.mdia / 2., 2.) * driver.mdepth;
                     /* surface area radius */
@@ -652,12 +614,11 @@ int main() {
                     /* voice-coil radius */
                     const double vcr = driver.vcd / 2.;
                     /* cone height */
-                    double ch = driver.depth - driver.mdepth - driver.xmax;
-                    if (ch < .0)
-                        ch = .0;
+                    const double ch = std::max(driver.depth - driver.mdepth - driver.xmax, 0.);
                     /* cone volume */
                     const double cv = std::numbers::pi * ch * (std::pow(vcr, 2.) + std::pow(sr, 2.) + vcr * sr) / 3;
                     /* total volume */
+                    static double vol = .0;
                     vol = (mv + cv) / 1e+6;
                     ImGui::BeginDisabled();
                     ImGui::DragScalar("Driver volume", ImGuiDataType_Double, &vol, .0f, nullptr, nullptr, "%.3f L");
@@ -712,13 +673,13 @@ int main() {
         /* Ras - acoustic resistance of driver suspension losses */
         const double ras = driver.rms / sd2;
         /* Res - electrical resistance due to driver suspension losses */
-        const double res = bl2 / driver.rms;
+        const std::complex res = bl2 / driver.rms;
         /* Lceb */
         const double lceb = bl2 * cab / sd2;
         /* Ral - acoustic resistance of enclosure lossescaused by leakage */
-        const double ral = ql / (wb * cab);
+        const std::complex ral = ql / (wb * cab);
         /* Rel - acoustic resistance of enclosure lossescaused by leakage */
-        const double rel = bl2 / (sd2 * ral);
+        const std::complex rel = bl2 / (sd2 * ral);
         /* Mas - acoustic mass of driver diaphragm assembly including air load */
         const double mas = mms / sd2;
         /* eg - Open-circuit output voltage of source */
@@ -735,8 +696,9 @@ int main() {
         const auto calc_lpa = [&]() {
             return std::pow(c, 2.) * sp / (std::pow(2. * std::numbers::pi, 2.) * std::pow(fb, 2.) * vb);
         };
-        std::function<vented_box(const double)> calc_vented_box;
-        calc_vented_box = [&](const double f) {
+
+        std::function<void(const double, double* const, double* const, double* const, double* const, double* const, double* const, double* const, double* const, double* const, double* const)> calc_vented_box;
+        calc_vented_box = [&](const double f, double* const _g, double* const _phg, double* const _zvc, double* const _phzvc, double* const _gd, double* const _x, double* const _v, double* const _spld, double* const _splp, double* const _spl) {
             const auto phase = [](const std::complex<double>& arg) {
                 const auto degrees = [](const double radians) {
                     return (360. / (2. * std::numbers::pi)) * radians;
@@ -772,81 +734,109 @@ int main() {
             const std::complex zas = rat + s * mas + 1. / (s * cas);
             const std::complex zab = 1. / (s * cab);
 
-            const std::complex z0 = parallel<std::complex<double>>({zab, ral});
-
-            /* Up - volume velocity of port */
-            const std::complex up = pg * z0 / (zaa * z0 + zas * (zaa + z0));
+            const std::complex z0 = parallel(zab, ral);
 
             const std::complex up_spl = pg_spl * z0 / (zaa * z0 + zas * (zaa + z0));
 
-            const std::complex z1 = zas + parallel<std::complex<double>>({zaa, zab, ral});
-            const std::complex z2 = parallel<std::complex<double>>({zaa, ral});
+            const std::complex z1 = zas + parallel(zaa, zab, ral);
+            const std::complex z2 = parallel(zaa, ral);
 
             /* U0 - total volume velocity leaving enclosure boundaries */
             const std::complex u0 = pg * z2 / (zab * z2 + zas * (zab + z2));
 
-            vented_box enclosure;
-
-            /* volume velocity of driver diaphragm */
-            const std::complex ud = pg / z1;
             const std::complex ud_spl = pg_spl / z1;
-            /* Diaphragm dsiplacement */
-            enclosure.x = std::sqrt(2.) * std::abs(ud / (sd * s));
-            /* Response */
-            const std::complex g = s * mas * u0 / pg;
-            enclosure.g = 20. * std::log10(std::abs(g));
-            /* Response phase */
-            const double phg = phase(g);
-            enclosure.phg = phg;
-
-            const double f_prev = f / gap;
-            const std::complex s_prev(0., f_prev * 2. * std::numbers::pi);
-            const std::complex zas_prev = rat + s_prev * mas + 1. / (s_prev * cas);
-            const std::complex zaa_prev = s_prev * map;
-            const std::complex zab_prev = 1. / (s_prev * cab);
-
-            const std::complex z3 = parallel<std::complex<double>>({zaa_prev, ral});
-
-            const std::complex u0_prev = pg * z3 / (zab_prev * z3 + zas_prev * (zab_prev + z3));
-            const std::complex g_prev = s_prev * mas * u0_prev / pg;
-            const double phg_prev = phase(g_prev);
-            /* Group delay */
-            if ((phg > .0 && phg_prev > .0) || (phg < .0 && phg_prev < .0)) {
-                enclosure.gd = (-1. / 360.) * ((phg - phg_prev) / (f - f_prev));
-            } else {
-                const double gd_prev = calc_vented_box(f_prev).gd;
-                const double gd_next = calc_vented_box(f * gap).gd;
-                enclosure.gd = .5 * (gd_prev + gd_next);
+            if (_x != nullptr) {
+                /* Volume velocity of driver diaphragm */
+                const std::complex ud = pg / z1;
+                /* Diaphragm dsiplacement */
+                *_x = std::sqrt(2.) * std::abs(ud / (sd * s));
             }
-            /* Port air velocity */
-            enclosure.v = std::sqrt(2.) * std::abs(up) / sp;
-            /* Driver sound pressure level */
-            enclosure.spld = 79.6 + 20. * std::log10(std::abs(ud_spl * rh0 * s));
-            /* Port sound pressure level */
-            enclosure.splp = 79.6 + 20. * std::log10(std::abs(up_spl * rh0 * s));
-            /* Overall sound pressure level */
-            enclosure.spl = 79.6 + 20. * std::log10(std::abs((up_spl - ud_spl) * s * rh0));
+            const std::complex g = s * mas * u0 / pg;
+            if (_g != nullptr) {
+                /* Response */
+                *_g = 20. * std::log10(std::abs(g));
+            }
+            const double phg = phase(g);
+            if (_phg != nullptr) {
+                /* Response phase */
+                *_phg = phg;
+            }
+            if (_gd != nullptr) {
+                const double f_prev = f / gap;
+                const std::complex s_prev(0., f_prev * 2. * std::numbers::pi);
+                const std::complex zas_prev = rat + s_prev * mas + 1. / (s_prev * cas);
+                const std::complex zaa_prev = s_prev * map;
+                const std::complex zab_prev = 1. / (s_prev * cab);
 
-            const std::complex ze = rel + s * lceb + 1. / (s * cmep);
-            const std::complex zs = parallel<std::complex<double>>({res, s * lces, 1. / (s * cmes)});
-            const std::complex zm = parallel<std::complex<double>>({ze, zs});
-            /* Voice-coil impedance */
-            const std::complex zvc = re + s * le + zm;
-            enclosure.zvc = std::abs(zvc);
-            /* Voice-coil impedance phase */
-            enclosure.phzvc = phase(zvc);
+                const std::complex z3 = parallel(zaa_prev, ral);
 
-            return enclosure;
+                const std::complex u0_prev = pg * z3 / (zab_prev * z3 + zas_prev * (zab_prev + z3));
+                const std::complex g_prev = s_prev * mas * u0_prev / pg;
+                /* Group delay */
+                if (const double phg_prev = phase(g_prev); (phg > .0 && phg_prev > .0) || (phg < .0 && phg_prev < .0)) {
+                    *_gd = (-1. / 360.) * ((phg - phg_prev) / (f - f_prev));
+                }
+                else {
+                    double gd_prev;
+                    calc_vented_box(f_prev, nullptr, nullptr, nullptr, nullptr, &gd_prev, nullptr, nullptr, nullptr, nullptr, nullptr);
+                    double gd_next;
+                    calc_vented_box(f * gap, nullptr, nullptr, nullptr, nullptr, &gd_next, nullptr, nullptr, nullptr, nullptr, nullptr);
+                    *_gd = .5 * (gd_prev + gd_next);
+                }
+            }
+            if (_v != nullptr) {
+                /* Up - volume velocity of port */
+                const std::complex up = pg * z0 / (zaa * z0 + zas * (zaa + z0));
+                /* Port air velocity */
+                *_v = std::sqrt(2.) * std::abs(up) / sp;
+            }
+            if (_spld != nullptr) {
+                /* Driver sound pressure level */
+                *_spld = 79.6 + 20. * std::log10(std::abs(ud_spl * rh0 * s));
+            }
+            if (_splp != nullptr) {
+                /* Port sound pressure level */
+                *_splp = 79.6 + 20. * std::log10(std::abs(up_spl * rh0 * s));
+            }
+            if (_spl != nullptr) {
+                /* Overall sound pressure level */
+                *_spl = 79.6 + 20. * std::log10(std::abs((up_spl - ud_spl) * s * rh0));
+            }
+            if (_zvc != nullptr) {
+                /* Voice-coil impedance */
+                const std::complex ze = rel + s * lceb + 1. / (s * cmep);
+                const std::complex zs = parallel(res, s * lces, 1. / (s * cmes));
+                const std::complex zm = parallel(ze, zs);
+                const std::complex zvc = re + s * le + zm;
+                *_zvc = std::abs(zvc);
+                /* And voice-coil impedance phase */
+                if (_phzvc != nullptr) {
+                    *_phzvc = phase(zvc);
+                }
+            } else if (_phzvc != nullptr) {
+                /* Voice-coil impedance phase only */
+                const std::complex ze = rel + s * lceb + 1. / (s * cmep);
+                const std::complex zs = parallel(res, s * lces, 1. / (s * cmes));
+                const std::complex zm = parallel(ze, zs);
+                const std::complex zvc = re + s * le + zm;
+                *_phzvc = phase(zvc);
+            }
         };
 
-        std::array<double, nfreq> g, phg, zvc, phzvc, gd, x, v, spld, splp, spl;
+        const auto calc_v = [&](const double f) {
+            double v;
+            calc_vented_box(f, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, &v, nullptr, nullptr, nullptr);
+            return v;
+        };
+
+        std::vector<double> g(nfreq), phg(nfreq), zvc(nfreq), phzvc(nfreq), gd(nfreq), x(nfreq), v(nfreq), spld(nfreq), splp(nfreq), spl(nfreq);
 
         if (index_vendor_prev != index_vendor || index_model_prev != index_model) {
             const double sp_prev = sp;
             const auto f = [&](const double arg) {
                 sp = arg;
                 double a = freq.front();
-                return fmin([&](const double arg) { return calc_vented_box(arg).v; }, a, freq.back()) - 9.;
+                return fmin([&](const double f) { return calc_v(f); }, a, freq.back()) - 9.;
             };
             double b = sp_min;
             const int r = fzero(f, b, 2 * driver.sd);
@@ -858,19 +848,19 @@ int main() {
         index_vendor_prev = index_vendor;
         index_model_prev = index_model;
 
-        for (int i = 0; i < freq.size(); ++i) {
-            const vented_box enclosure = calc_vented_box(freq[i]);
-            g[i] = enclosure.g;
-            phg[i] = enclosure.phg;
-            zvc[i] = enclosure.zvc;
-            phzvc[i] = enclosure.phzvc;
-            gd[i] = enclosure.gd;
-            x[i] = enclosure.x;
-            v[i] = enclosure.v;
-            spld[i] = enclosure.spld;
-            splp[i] = enclosure.splp;
-            spl[i] = enclosure.spl;
-        }
+        auto it_g = g.begin();
+        auto it_phg = phg.begin();
+        auto it_zvc = zvc.begin();
+        auto it_phzvc = phzvc.begin();
+        auto it_gd = gd.begin();
+        auto it_x = x.begin();
+        auto it_v = v.begin();
+        auto it_spld = spld.begin();
+        auto it_splp = splp.begin();
+        auto it_spl = spl.begin();
+
+        for (const auto f : freq)
+            calc_vented_box(f, &*it_g++, &*it_phg++, &*it_zvc++, &*it_phzvc++, &*it_gd++, &*it_x++, &*it_v++, &*it_spld++, &*it_splp++, &*it_spl++);
 
         if (show_design) {
             ImGui::SetNextWindowSizeConstraints(ImVec2(400, 0), ImVec2(400, FLT_MAX));
@@ -945,7 +935,7 @@ int main() {
         ImGui::SetNextWindowPos(viewport->Pos);
         ImGui::SetNextWindowSize(viewport->Size);
         if (ImGui::Begin("Plot", NULL, ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings)) {
-            const ImPlotFlags flagsPlot = ImPlotFlags_NoTitle | ImPlotFlags_NoLegend | ImPlotFlags_NoMenus | ImPlotFlags_NoBoxSelect | ImPlotFlags_NoMouseText;
+            constexpr ImPlotFlags flagsPlot = ImPlotFlags_NoTitle | ImPlotFlags_NoLegend | ImPlotFlags_NoMenus | ImPlotFlags_NoBoxSelect | ImPlotFlags_NoMouseText;
             ImPlot::PushStyleColor(ImPlotCol_FrameBg, IM_COL32_BLACK_TRANS);
 
             if (ImGui::BeginTabBar("Plots")) {
@@ -954,28 +944,32 @@ int main() {
                         ImPlot::SetupAxes("Frequency [Hz]", "Response [dB]", ImPlotAxisFlags_NoSideSwitch | ImPlotAxisFlags_NoHighlight, ImPlotAxisFlags_NoSideSwitch | ImPlotAxisFlags_NoHighlight);
                         ImPlot::SetupAxisScale(ImAxis_X1, ImPlotScale_Log10);
                         ImPlot::SetupAxisLimits(ImAxis_X1, freq.front(), freq.back(), ImPlotCond_Always);
-
                         const auto [min, max] = std::ranges::minmax(g);
                         const double d = (max - min) * .1;
-                        ImPlot::SetupAxisLimits(ImAxis_Y1, min - d, max + d, fit_g ? ImPlotCond_Always : ImPlotCond_Once);
-                        fit_g = false;
+                        ImPlot::SetupAxisLimitsConstraints(ImAxis_Y1, min - d, max + d);
                         ImPlot::PlotLine("##line", freq.data(), g.data(), nfreq);
+                        const auto calc_g = [&](const double f) {
+                            double g;
+                            calc_vented_box(f, &g, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr);
+                            return g;
+                        };
                         static bool show_f3 = true;
                         if (show_f3) {
                             double a = freq.front();
-                            const int r = fzero([&](const double v) { return calc_vented_box(v).g + 3.; }, a, freq.back());
+                            const int r = fzero([&](const double v) { return calc_g(v) + 3.; }, a, freq.back());
                             if (r != 5) {
                                 ImPlot::DragLineX(id0, &a, ImVec4(.15f, .8f, .15f, .5f), 1.f, ImPlotDragToolFlags_NoInputs);
                                 const ImPlotRect rect = ImPlot::GetPlotLimits();
-                                ImPlot::Annotation(a, rect.Min().y, ImVec4(.15f, .15f, .15f, 1), ImVec2(5, -5), true, "Freq: %.2f Hz, Response: %.2f dB", a, calc_vented_box(a).g);
+                                ImPlot::Annotation(a, rect.Min().y, ImVec4(.15f, .15f, .15f, 1), ImVec2(5, -5), true, "Freq: %.2f Hz, Response: %.2f dB", a, calc_g(a));
                             }
                         }
                         if (show_сrosshairs && ImPlot::IsPlotHovered()) {
                             double f = ImPlot::GetPlotMousePos().x;
                             ImPlot::DragLineX(id1, &f, ImVec4(.9f, .15f, .15f, .5f), 1.f, ImPlotDragToolFlags_NoInputs);
-                            vented_box enclosure = calc_vented_box(f);
-                            ImPlot::DragLineY(id2, &enclosure.g, ImVec4(.9f, .15f, .15f, .5f), 1.f, ImPlotDragToolFlags_NoInputs);
-                            ImPlot::Annotation(f, enclosure.g, ImVec4(.15f, .15f, .15f, 1), ImVec2(5, -5), true, "Freq: %.2f Hz, Response: %.2f dB", f, enclosure.g);
+                            double g;
+                            calc_vented_box(f, &g, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr);
+                            ImPlot::DragLineY(id2, &g, ImVec4(.9f, .15f, .15f, .5f), 1.f, ImPlotDragToolFlags_NoInputs);
+                            ImPlot::Annotation(f, g, ImVec4(.15f, .15f, .15f, 1), ImVec2(5, -5), true, "Freq: %.2f Hz, Response: %.2f dB", f, g);
                         }
                         if (ImGui::BeginPopupContextItem()) {
                             ImGui::MenuItem("Driver database", NULL, &show_driver);
@@ -1004,20 +998,19 @@ int main() {
                         }
                         ImPlot::SetupAxes("Frequency [Hz]", "Response phase [deg]", ImPlotAxisFlags_NoSideSwitch | ImPlotAxisFlags_NoHighlight, ImPlotAxisFlags_NoSideSwitch | ImPlotAxisFlags_NoHighlight);
                         ImPlot::SetupAxisScale(ImAxis_X1, ImPlotScale_Log10);
-
+                        ImPlot::SetupAxisLimits(ImAxis_X1, freq.front(), freq.back(), ImPlotCond_Always);
                         const auto [min, max] = std::ranges::minmax(phg);
                         const double d = (max - min) * .1;
-                        ImPlot::SetupAxisLimits(ImAxis_Y1, min - d, max + d, fit_phg ? ImPlotCond_Always : ImPlotCond_Once);
-                        fit_phg = false;
-                        ImPlot::SetupAxisLimits(ImAxis_X1, freq.front(), freq.back(), ImPlotCond_Always);
+                        ImPlot::SetupAxisLimitsConstraints(ImAxis_Y1, min - d, max + d);
                         ImPlot::PlotLine("##line", freq.data(), l0.data(), static_cast<int>(l0.size()));
                         ImPlot::PlotLine("##line", freq.data() + l0.size(), l1.data(), static_cast<int>(l1.size()));
                         if (show_сrosshairs && ImPlot::IsPlotHovered()) {
                             double f = ImPlot::GetPlotMousePos().x;
                             ImPlot::DragLineX(id0, &f, ImVec4(.9f, .15f, .15f, .5f), 1.f, ImPlotDragToolFlags_NoInputs);
-                            vented_box enclosure = calc_vented_box(f);
-                            ImPlot::DragLineY(id1, &enclosure.phg, ImVec4(.9f, .15f, .15f, .5f), 1.f, ImPlotDragToolFlags_NoInputs);
-                            ImPlot::Annotation(f, enclosure.phg, ImVec4(.15f, .15f, .15f, 1), ImVec2(5, -5), true, "Freq: %.2f Hz, Response phase: %.2f deg", f, enclosure.phg);
+                            double phg;
+                            calc_vented_box(f, nullptr, &phg, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr);
+                            ImPlot::DragLineY(id1, &phg, ImVec4(.9f, .15f, .15f, .5f), 1.f, ImPlotDragToolFlags_NoInputs);
+                            ImPlot::Annotation(f, phg, ImVec4(.15f, .15f, .15f, 1), ImVec2(5, -5), true, "Freq: %.2f Hz, Response phase: %.2f deg", f, phg);
                         }
                         if (ImGui::BeginPopupContextItem()) {
                             ImGui::MenuItem("Driver database", NULL, &show_driver);
@@ -1037,18 +1030,17 @@ int main() {
                         ImPlot::SetupAxes("Frequency [Hz]", "Group delay [sec]", ImPlotAxisFlags_NoSideSwitch | ImPlotAxisFlags_NoHighlight, ImPlotAxisFlags_NoSideSwitch | ImPlotAxisFlags_NoHighlight);
                         ImPlot::SetupAxisScale(ImAxis_X1, ImPlotScale_Log10);
                         ImPlot::SetupAxisLimits(ImAxis_X1, freq.front(), freq.back(), ImPlotCond_Always);
-
                         const auto [min, max] = std::ranges::minmax(gd);
                         const double d = (max - min) * .1;
-                        ImPlot::SetupAxisLimits(ImAxis_Y1, min - d, max + d, fit_gd ? ImPlotCond_Always : ImPlotCond_Once);
-                        fit_gd = false;
+                        ImPlot::SetupAxisLimitsConstraints(ImAxis_Y1, min - d, max + d);
                         ImPlot::PlotLine("##line", freq.data(), gd.data(), nfreq);
                         if (show_сrosshairs && ImPlot::IsPlotHovered()) {
                             double f = ImPlot::GetPlotMousePos().x;
                             ImPlot::DragLineX(id0, &f, ImVec4(.9f, .15f, .15f, .5f), 1.f, ImPlotDragToolFlags_NoInputs);
-                            vented_box enclosure = calc_vented_box(f);
-                            ImPlot::DragLineY(id1, &enclosure.gd, ImVec4(.9f, .15f, .15f, .5f), 1.f, ImPlotDragToolFlags_NoInputs);
-                            ImPlot::Annotation(f, enclosure.gd, ImVec4(.15f, .15f, .15f, 1), ImVec2(5, -5), true, "Freq: %.2f Hz, Group delay: %.4f sec", f, enclosure.gd);
+                            double gd;
+                            calc_vented_box(f, nullptr, nullptr, nullptr, nullptr, &gd, nullptr, nullptr, nullptr, nullptr, nullptr);
+                            ImPlot::DragLineY(id1, &gd, ImVec4(.9f, .15f, .15f, .5f), 1.f, ImPlotDragToolFlags_NoInputs);
+                            ImPlot::Annotation(f, gd, ImVec4(.15f, .15f, .15f, 1), ImVec2(5, -5), true, "Freq: %.2f Hz, Group delay: %.4f sec", f, gd);
                         }
                         if (ImGui::BeginPopupContextItem()) {
                             ImGui::MenuItem("Driver database", NULL, &show_driver);
@@ -1068,18 +1060,17 @@ int main() {
                         ImPlot::SetupAxes("Frequency [Hz]", "Cone excursion [m]", ImPlotAxisFlags_NoSideSwitch | ImPlotAxisFlags_NoHighlight, ImPlotAxisFlags_NoSideSwitch | ImPlotAxisFlags_NoHighlight);
                         ImPlot::SetupAxisScale(ImAxis_X1, ImPlotScale_Log10);
                         ImPlot::SetupAxisLimits(ImAxis_X1, freq.front(), freq.back(), ImPlotCond_Always);
-
                         const auto [min, max] = std::ranges::minmax(x);
                         const double d = (max - min) * .1;
-                        ImPlot::SetupAxisLimits(ImAxis_Y1, min - d, max + d, fit_x ? ImPlotCond_Always : ImPlotCond_Once);
-                        fit_x = false;
+                        ImPlot::SetupAxisLimitsConstraints(ImAxis_Y1, min - d, max + d);
                         ImPlot::PlotLine("##line", freq.data(), x.data(), nfreq);
                         if (show_сrosshairs && ImPlot::IsPlotHovered()) {
                             double f = ImPlot::GetPlotMousePos().x;
                             ImPlot::DragLineX(id0, &f, ImVec4(.9f, .15f, .15f, .5f), 1.f, ImPlotDragToolFlags_NoInputs);
-                            vented_box enclosure = calc_vented_box(f);
-                            ImPlot::DragLineY(id1, &enclosure.x, ImVec4(.9f, .15f, .15f, .5f), 1.f, ImPlotDragToolFlags_NoInputs);
-                            ImPlot::Annotation(f, enclosure.x, ImVec4(.15f, .15f, .15f, 1), ImVec2(5, -5), true, "Freq: %.2f Hz, Cone excursion: %.4f m", f, enclosure.x);
+                            double x;
+                            calc_vented_box(f, nullptr, nullptr, nullptr, nullptr, nullptr, &x, nullptr, nullptr, nullptr, nullptr);
+                            ImPlot::DragLineY(id1, &x, ImVec4(.9f, .15f, .15f, .5f), 1.f, ImPlotDragToolFlags_NoInputs);
+                            ImPlot::Annotation(f, x, ImVec4(.15f, .15f, .15f, 1), ImVec2(5, -5), true, "Freq: %.2f Hz, Cone excursion: %.4f m", f, x);
                         }
                         static bool show_xmax = true;
                         static bool show_xmech = true;
@@ -1119,13 +1110,12 @@ int main() {
                         ImPlot::SetupAxisLimits(ImAxis_X1, freq.front(), freq.back(), ImPlotCond_Always);
                         const auto [min, max] = std::ranges::minmax(v);
                         const double d = (max - min) * .1;
-                        ImPlot::SetupAxisLimits(ImAxis_Y1, min - d, max + d, fit_v ? ImPlotCond_Always : ImPlotCond_Once);
-                        fit_v = false;
+                        ImPlot::SetupAxisLimitsConstraints(ImAxis_Y1, min - d, max + d);
                         ImPlot::PlotLine("##line", freq.data(), v.data(), nfreq);
                         static bool show_max_v = true;
                         if (show_max_v) {
                             double a = freq.front();
-                            double max_v = fmin([&](const double arg) { return calc_vented_box(arg).v; }, a, freq.back());
+                            double max_v = fmin([&](const double arg) { return calc_v(arg); }, a, freq.back());
                             ImPlot::DragLineX(id0, &a, ImVec4(.15f, .8f, .15f, .5f), 1.f, ImPlotDragToolFlags_NoInputs);
                             const ImPlotRect rect = ImPlot::GetPlotLimits();
                             ImPlot::Annotation(a, rect.Min().y, ImVec4(.15f, .15f, .15f, 1), ImVec2(5, -5), true, "Freq: %.2f Hz, Port air velocity: %.2f m/sec", a, max_v);
@@ -1134,9 +1124,10 @@ int main() {
                         if (show_сrosshairs && ImPlot::IsPlotHovered()) {
                             double f = ImPlot::GetPlotMousePos().x;
                             ImPlot::DragLineX(id1, &f, ImVec4(.9f, .15f, .15f, .5f), 1.f, ImPlotDragToolFlags_NoInputs);
-                            vented_box enclosure = calc_vented_box(f);
-                            ImPlot::DragLineY(id2, &enclosure.v, ImVec4(.9f, .15f, .15f, .5f), 1.f, ImPlotDragToolFlags_NoInputs);
-                            ImPlot::Annotation(f, enclosure.v, ImVec4(.15f, .15f, .15f, 1), ImVec2(5, -5), true, "Freq: %.2f Hz, Port air velocity: %.2f m/sec", f, enclosure.v);
+                            double v;
+                            calc_vented_box(f, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, &v, nullptr, nullptr, nullptr);
+                            ImPlot::DragLineY(id2, &v, ImVec4(.9f, .15f, .15f, .5f), 1.f, ImPlotDragToolFlags_NoInputs);
+                            ImPlot::Annotation(f, v, ImVec4(.15f, .15f, .15f, 1), ImVec2(5, -5), true, "Freq: %.2f Hz, Port air velocity: %.2f m/sec", f, v);
                         }
 
                         if (ImGui::BeginPopupContextItem()) {
@@ -1158,22 +1149,21 @@ int main() {
                         ImPlot::SetupAxes("Frequency [Hz]", "Voice-coil impedance magnitude [ohms]", ImPlotAxisFlags_NoSideSwitch | ImPlotAxisFlags_NoHighlight, ImPlotAxisFlags_NoSideSwitch | ImPlotAxisFlags_NoHighlight);
                         ImPlot::SetupAxisScale(ImAxis_X1, ImPlotScale_Log10);
                         ImPlot::SetupAxisLimits(ImAxis_X1, freq.front(), freq.back(), ImPlotCond_Always);
-
                         const auto [min, max] = std::ranges::minmax(zvc);
                         const double d = (max - min) * .1;
-                        ImPlot::SetupAxisLimits(ImAxis_Y1, min - d, max + d, fit_zvc ? ImPlotCond_Always : ImPlotCond_Once);
-                        fit_zvc = false;
+                        ImPlot::SetupAxisLimitsConstraints(ImAxis_Y1, min - d, max + d);
                         ImPlot::PlotLine("##line", freq.data(), zvc.data(), nfreq);
 
                         if (show_сrosshairs && ImPlot::IsPlotHovered()) {
                             double f = ImPlot::GetPlotMousePos().x;
                             ImPlot::DragLineX(id0, &f, ImVec4(.9f, .15f, .15f, .5f), 1.f, ImPlotDragToolFlags_NoInputs);
-                            vented_box enclosure = calc_vented_box(f);
-                            ImPlot::DragLineY(id1, &enclosure.zvc, ImVec4(.9f, .15f, .15f, .5f), 1.f, ImPlotDragToolFlags_NoInputs);
-                            ImPlot::Annotation(f, enclosure.zvc, ImVec4(0.15f, 0.15f, 0.15f, 1), ImVec2(5, -5), true,
+                            double zvc;
+                            calc_vented_box(f, nullptr, nullptr, &zvc, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr);
+                            ImPlot::DragLineY(id1, &zvc, ImVec4(.9f, .15f, .15f, .5f), 1.f, ImPlotDragToolFlags_NoInputs);
+                            ImPlot::Annotation(f, zvc, ImVec4(0.15f, 0.15f, 0.15f, 1), ImVec2(5, -5), true,
                                                "Freq: %.2f Hz, Voice-coil "
                                                "impedance magnitude: %.2f ohms",
-                                               f, enclosure.zvc);
+                                               f, zvc);
                         }
 
                         if (ImGui::BeginPopupContextItem()) {
@@ -1194,22 +1184,21 @@ int main() {
                         ImPlot::SetupAxes("Frequency [Hz]", "Voice-coil impedance phase [deg]", ImPlotAxisFlags_NoSideSwitch | ImPlotAxisFlags_NoHighlight, ImPlotAxisFlags_NoSideSwitch | ImPlotAxisFlags_NoHighlight);
                         ImPlot::SetupAxisScale(ImAxis_X1, ImPlotScale_Log10);
                         ImPlot::SetupAxisLimits(ImAxis_X1, freq.front(), freq.back(), ImPlotCond_Always);
-
                         const auto [min, max] = std::ranges::minmax(phzvc);
                         const double d = (max - min) * .1;
-                        ImPlot::SetupAxisLimits(ImAxis_Y1, min - d, max + d, fit_phzvc ? ImPlotCond_Always : ImPlotCond_Once);
-                        fit_phzvc = false;
+                        ImPlot::SetupAxisLimitsConstraints(ImAxis_Y1, min - d, max + d);
                         ImPlot::PlotLine("##line", freq.data(), phzvc.data(), nfreq);
 
                         if (show_сrosshairs && ImPlot::IsPlotHovered()) {
                             double f = ImPlot::GetPlotMousePos().x;
                             ImPlot::DragLineX(id0, &f, ImVec4(.9f, .15f, .15f, .5f), 1.f, ImPlotDragToolFlags_NoInputs);
-                            vented_box plot = calc_vented_box(f);
-                            ImPlot::DragLineY(id1, &plot.phzvc, ImVec4(.9f, .15f, .15f, .5f), 1.f, ImPlotDragToolFlags_NoInputs);
-                            ImPlot::Annotation(f, plot.phzvc, ImVec4(0.15f, .15f, .15f, 1), ImVec2(5, -5), true,
+                            double phzvc;
+                            calc_vented_box(f, nullptr, nullptr, nullptr, &phzvc, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr);
+                            ImPlot::DragLineY(id1, &phzvc, ImVec4(.9f, .15f, .15f, .5f), 1.f, ImPlotDragToolFlags_NoInputs);
+                            ImPlot::Annotation(f, phzvc, ImVec4(0.15f, .15f, .15f, 1), ImVec2(5, -5), true,
                                                "Freq: %.2f Hz, Voice-coil "
                                                "impedance phase: %.1f deg",
-                                               f, plot.phzvc);
+                                               f, phzvc);
                         }
 
                         if (ImGui::BeginPopupContextItem()) {
@@ -1232,8 +1221,7 @@ int main() {
                         ImPlot::SetupAxisLimits(ImAxis_X1, freq.front(), freq.back(), ImPlotCond_Always);
                         const auto [min, max] = std::ranges::minmax(spl);
                         const double d = (max - min) * .1;
-                        ImPlot::SetupAxisLimits(ImAxis_Y1, min - d, max + d, fit_spl ? ImPlotCond_Always : ImPlotCond_Once);
-                        fit_spl = false;
+                        ImPlot::SetupAxisLimitsConstraints(ImAxis_Y1, min - d, max + d);
                         ImPlot::PlotLine("Driver SPL", freq.data(), spld.data(), nfreq);
                         ImPlot::PlotLine("Port SPL", freq.data(), splp.data(), nfreq);
                         ImPlot::PlotLine("Overall SPL", freq.data(), spl.data(), nfreq);
@@ -1246,16 +1234,17 @@ int main() {
                             ImPlot::IsPlotHovered() && show_сrosshairs) {
                             double f = ImPlot::GetPlotMousePos().x;
                             ImPlot::DragLineX(id0, &f, ImVec4(.9f, .15f, .15f, .5f), 1.f, ImPlotDragToolFlags_NoInputs);
-                            vented_box enclosure = calc_vented_box(f);
+                            double spld, splp, spl;
+                            calc_vented_box(f, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, &spld, &splp, &spl);
                             if (crosshairs_spld) {
-                                ImPlot::DragLineY(id1, &enclosure.spld, ImVec4(.9f, .15f, .15f, .5f), 1.f, ImPlotDragToolFlags_NoInputs);
-                                ImPlot::Annotation(f, enclosure.spld, ImVec4(.15f, .15f, .15f, 1), ImVec2(5, -5), true, "Freq: %.2f Hz, Driver SPL: %.1f dB", f, enclosure.spld);
+                                ImPlot::DragLineY(id1, &spld, ImVec4(.9f, .15f, .15f, .5f), 1.f, ImPlotDragToolFlags_NoInputs);
+                                ImPlot::Annotation(f, spld, ImVec4(.15f, .15f, .15f, 1), ImVec2(5, -5), true, "Freq: %.2f Hz, Driver SPL: %.1f dB", f, spld);
                             } else if (crosshairs_splp) {
-                                ImPlot::DragLineY(id1, &enclosure.splp, ImVec4(.9f, .15f, .15f, .5f), 1.f, ImPlotDragToolFlags_NoInputs);
-                                ImPlot::Annotation(f, enclosure.splp, ImVec4(.15f, .15f, .15f, 1), ImVec2(5, -5), true, "Freq: %.2f Hz, Port SPL: %.1f dB", f, enclosure.splp);
+                                ImPlot::DragLineY(id1, &splp, ImVec4(.9f, .15f, .15f, .5f), 1.f, ImPlotDragToolFlags_NoInputs);
+                                ImPlot::Annotation(f, splp, ImVec4(.15f, .15f, .15f, 1), ImVec2(5, -5), true, "Freq: %.2f Hz, Port SPL: %.1f dB", f, splp);
                             } else if (crosshairs_spl) {
-                                ImPlot::DragLineY(id1, &enclosure.spl, ImVec4(.9f, .15f, .15f, .5f), 1.f, ImPlotDragToolFlags_NoInputs);
-                                ImPlot::Annotation(f, enclosure.spl, ImVec4(.15f, .15f, .15f, 1), ImVec2(5, -5), true, "Freq: %.2f Hz, Overall SPL: %.1f dB", f, enclosure.spl);
+                                ImPlot::DragLineY(id1, &spl, ImVec4(.9f, .15f, .15f, .5f), 1.f, ImPlotDragToolFlags_NoInputs);
+                                ImPlot::Annotation(f, spl, ImVec4(.15f, .15f, .15f, 1), ImVec2(5, -5), true, "Freq: %.2f Hz, Overall SPL: %.1f dB", f, spl);
                             }
                         }
 
